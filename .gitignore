@@ -3,3 +3,7 @@
 *.jl.mem
 docs/build/
 docs/site/
+
+\.DS_Store
+
+notes\.md
