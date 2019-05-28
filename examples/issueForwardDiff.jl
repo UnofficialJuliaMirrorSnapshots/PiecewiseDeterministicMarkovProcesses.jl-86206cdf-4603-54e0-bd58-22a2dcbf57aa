@@ -3,8 +3,8 @@ const PDMP = PiecewiseDeterministicMarkovProcesses
 
 function F_fd!(ẋ, xc, xd, t, parms)
 	# vector field used for the continuous variable
-	if mod(xd[1], 2)==0
-		ẋ[1] = 1 + xd[1] + 0
+	if mod(xd[1], 2) == 0
+		ẋ[1] = 1 + xd[1]
 	else
 		ẋ[1] = -xc[1]
 	end
@@ -32,30 +32,28 @@ parms = [0.0]
 
 # works:
 Random.seed!(12)
-	res =  @time PDMP.pdmp!(xc0, xd0, F_fd!, R_fd!,Dummy!, nu_fd, parms, 0.0, 10.0; algo = :chv, ode = CVODE_Adams())
+	res =  @time PDMP.pdmp!(xc0, xd0, F_fd!, R_fd!,Dummy!, nu_fd, parms, 0.0, 10000.0; algo = :chv, ode = CVODE_Adams()) #.967ms 4.38k allocations
 
 Random.seed!(12)
-	res =  @time PDMP.pdmp!(xc0, xd0, F_fd!, R_fd!,Dummy!, nu_fd, parms, 0.0, 100.0; algo = :chv, n_jumps = 3000,   ode = Tsit5(), save_positions=(false,false))
+	res =  @time PDMP.pdmp!(xc0, xd0, F_fd!, R_fd!,Dummy!, nu_fd, parms, 0.0, 10000.0; algo = :chv, n_jumps = 3000,   ode = Tsit5(), save_positions=(false,false)) #1.037ms 466 allocations
+
+Random.seed!(12)
+	res =  @time  PDMP.chv_diffeq!(xc0, xd0, F_fd!, R_fd!,Dummy!, nu_fd, parms, 0.0, 10000.0,false; n_jumps = 3000, ode = Tsit5() ,save_positions = (false, false), rate = zeros(2), xc0_extended = zeros(2))
+
+Random.seed!(12)
+	res =  @time PDMP.pdmp!(xc0, xd0, F_fd!, R_fd!,Dummy!, nu_fd, parms, 0.0, 10000.0; algo = :chv, n_jumps = 3000,   ode = AutoTsit5(Rosenbrock23(autodiff=true)), save_positions=(false,false)) #9ms
 
 # fail because of autodiff
 Random.seed!(12)
-	res =  @time PDMP.pdmp!(xc0, xd0, F_fd!, R_fd!,Dummy!, nu_fd, parms, 0.0, 10000.0; algo = :chv, n_jumps = 3000,   ode = AutoTsit5(Rosenbrock23(autodiff=true)), save_positions=(false,false))
+	res =  @time PDMP.pdmp!(xc0, xd0, F_fd!, R_fd!,Dummy!, nu_fd, parms, 0.0, 10000.0; algo = :chv, n_jumps = 3000,   ode =Rodas4P(autodiff=false), save_positions = (false,false))
 
 
+using StaticArrays
+sxc0 = @MVector [ 1.0 ]
+sxd0 = @MVector [1]
+ratevec = similar(sxc0, Size(2))
+sxc0_e = similar(sxc0, Size(2))
+ress =  @time  PDMP.chv_diffeq!(sxc0, sxd0, F_fd!, R_fd!,Dummy!, nu_fd, parms, 0.0, 10000.0,false; n_jumps = 3000, ode = Tsit5(),save_positions = (false, false), rate = ratevec, xc0_extended = sxc0_e)
 
 
-# using StaticArrays
-# sxc0 = @MVector [ 1.0 ]
-# sxd0 = @MVector [1]
-# res =  @time PDMP.chv_diffeq!(sxc0, sxd0, F_fd!, R_fd!,Dummy!, nu_fd, parms, 0.0, 10.0,false; n_jumps = 30,   ode = Tsit5(),save_positions=(false, false))
-#
-#
-#
-# similar(sxc0, Size(4))
-#
-# pbfunc = PDMP.PDMPFunctions(F_fd!, R_fd!,Dummy!)
-# pbsim = PDMP.PDMPsimulation{eltype(xc0), eltype(xd0)}(0.,0.,0, 0.,[0., 0.], false, 0)
-#
-# pb = PDMP.PDMPProblem{eltype(xc0),eltype(xd0),typeof(xc0),typeof(xd0),typeof(nu_fd),typeof(parms),typeof(F_fd!),typeof(R_fd!),typeof(Dummy!)}(copy(xc0), copy(xd0), F_fd!, R_fd!,Dummy!,nu_fd, parms, 0., 1.,false,false)
-#
-#
+length(sxc0)
