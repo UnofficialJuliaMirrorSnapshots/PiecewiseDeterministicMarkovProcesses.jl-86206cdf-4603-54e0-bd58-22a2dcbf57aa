@@ -8,7 +8,8 @@ end
 
 function (chv::CHV{Tode})(xdot, x, prob::Tpb, t) where {Tode, Tpb <: PDMPCaracteristics}
 	tau = x[end]
-	sr = prob.R(prob.ratecache, x, prob.xd, prob.parms, tau, true)[1]
+	rate = get_rate(prob.ratecache, x)
+	sr = prob.R(rate, x, prob.xd, prob.parms, tau, true)[1]
 	prob.F(xdot, x, prob.xd, prob.parms, tau)
 	xdot[end] = 1.0
 	@inbounds for i in eachindex(xdot)
@@ -44,13 +45,13 @@ function chvjump(integrator, prob::PDMPProblem, save_pre_jump, save_rate, verbos
 	end
 
 	# execute the jump
-	caract.R(caract.ratecache, integrator.u, caract.xd, caract.parms, t, false)
+	caract.R(get_rate(caract.ratecache, integrator.u), integrator.u, caract.xd, caract.parms, t, false)
 	if (t < tf)
 		#save rates for debugging
-		save_rate && push!(prob.rate_hist, sum(caract.ratecache))
+		save_rate && push!(prob.rate_hist, sum(caract.ratecache.rate))
 
 		# Update event
-		ev = pfsample(caract.ratecache, sum(caract.ratecache), length(caract.ratecache))
+		ev = pfsample(caract.ratecache.rate, sum(caract.ratecache.rate), length(caract.ratecache.rate))
 
 		# we perform the jump
 		affect!(caract.pdmpjump, ev, integrator.u, caract.xd, caract.parms, t)
@@ -72,12 +73,13 @@ end
 function chv_diffeq!(problem::PDMPProblem,
 			ti::Tc, tf::Tc, X_extended::vece,
 			verbose = false; ode = Tsit5(), save_positions = (false, true), n_jumps::Td = Inf64, reltol=1e-7, abstol=1e-9, save_rate = false) where {Tc, Td, vece}
+	verbose && println("#"^30)
 	verbose && printstyled(color=:red,"Entry in chv_diffeq\n")
 
 	ti, tf = problem.tspan
 	algopdmp = CHV(ode)
 
-	# initialise the problem. If I call twice this function, it should give the same result...
+	# initialise the problem. If I call twice this solve function, it should give the same result...
 	init!(problem)
 
 	# we declare the characteristics for convenience
@@ -103,7 +105,7 @@ function chv_diffeq!(problem::PDMPProblem,
 
 	# define the ODE flow, this leads to big memory saving
 	# prob_CHV = ODEProblem((xdot,x,data,tt) -> problem(xdot, x, data, tt), X_extended, (0.0, 1e9))
-	prob_CHV = ODEProblem((xdot, x, data, tt) -> algopdmp(xdot, x, caract, tt), X_extended, (0.0, 1e9))
+	prob_CHV = ODEProblem((xdot, x, data, tt) -> algopdmp(xdot, x, problem.caract, tt), X_extended, (0.0, 1e9))
 	integrator = init(prob_CHV, ode, tstops = problem.simjptimes.tstop_extended, callback = cb, save_everystep = false, reltol = reltol, abstol = abstol, advance_to_tstop = true)
 
 	# current jump number
@@ -128,7 +130,7 @@ function chv_diffeq!(problem::PDMPProblem,
 	end
 	# we check that the last bit [t_last_jump, tf] is not missing
 	if t>tf
-		verbose && println("----> LAST BIT!!, xc = ",caract.xc[end], ", xd = ",caract.xd, ", t = ", problem.time[end])
+		verbose && println("----> LAST BIT!!, xc = ", caract.xc[end], ", xd = ", caract.xd, ", t = ", problem.time[end])
 		prob_last_bit = ODEProblem((xdot,x,data,tt) -> caract.F(xdot, x, caract.xd, caract.parms, tt), copy(caract.xc), (tprev, tf))
 		sol = DiffEqBase.solve(prob_last_bit, ode)
 		verbose && println("-------> xc[end] = ",sol.u[end])
@@ -139,10 +141,15 @@ function chv_diffeq!(problem::PDMPProblem,
 	return PDMPResult(problem.time, problem.Xc, problem.Xd, problem.rate_hist, save_positions)
 end
 
+function solve(problem::PDMPProblem{Tc, Td, vectype_xc, vectype_xd, Tcar}, algo::CHV{Tode}, X_extended; verbose = false, n_jumps = Inf64, save_positions = (false, true), reltol = 1e-7, abstol = 1e-9, save_rate = false) where {Tc, Td, vectype_xc, vectype_xd, vectype_rate, Tnu, Tp, TF, TR, Tcar, Tode <: DiffEqBase.DEAlgorithm}
 
-function solve(problem::PDMPProblem{Tc, Td, vectype_xc, vectype_xd, Tcar}, algo::CHV{Tode}; verbose = false, n_jumps = Inf64, X_extended = zeros(Tc, 1 + 1), save_positions = (false, true), reltol = 1e-7, abstol = 1e-9, save_rate = false) where {Tc, Td, vectype_xc, vectype_xd, vectype_rate, Tnu, Tp, TF, TR, Tcar, Tode <: DiffEqBase.DEAlgorithm}
-	# hack to resize the extended vector to the proper dimension
-	resize!(X_extended, length(problem.caract.xc) + 1)
+	return chv_diffeq!(problem, problem.tspan[1], problem.tspan[2], X_extended, verbose; ode = algo.ode, save_positions = save_positions, n_jumps = n_jumps, reltol = reltol, abstol = abstol, save_rate = save_rate)
+end
+
+function solve(problem::PDMPProblem{Tc, Td, vectype_xc, vectype_xd, Tcar}, algo::CHV{Tode}; verbose = false, n_jumps = Inf64, save_positions = (false, true), reltol = 1e-7, abstol = 1e-9, save_rate = false) where {Tc, Td, vectype_xc, vectype_xd, vectype_rate, Tnu, Tp, TF, TR, Tcar, Tode <: DiffEqBase.DEAlgorithm}
+
+	# resize the extended vector to the proper dimension
+	X_extended = zeros(Tc, length(problem.caract.xc) + 1)
 
 	return chv_diffeq!(problem, problem.tspan[1], problem.tspan[2], X_extended, verbose; ode = algo.ode, save_positions = save_positions, n_jumps = n_jumps, reltol = reltol, abstol = abstol, save_rate = save_rate)
 end

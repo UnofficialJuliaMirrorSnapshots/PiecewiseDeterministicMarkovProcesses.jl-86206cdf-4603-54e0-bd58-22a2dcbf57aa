@@ -1,6 +1,6 @@
 module PiecewiseDeterministicMarkovProcesses
-	using Random, LinearAlgebra
-	using LSODA, Sundials, DifferentialEquations, RecursiveArrayTools, DiffEqBase, SparseArrays
+	using Random, LinearAlgebra, SparseArrays, Parameters
+	using LSODA, Sundials, DiffEqJump, RecursiveArrayTools, DiffEqBase, SparseArrays
 	using ForwardDiff
 	import DiffEqBase: solve
 
@@ -12,6 +12,7 @@ module PiecewiseDeterministicMarkovProcesses
 	abstract type AbstractRejectionIterator <: AbstractRejection end
 
 	include("utilsforwarddiff.jl")
+	include("rate.jl")
 	include("problem.jl")
 	include("utils.jl")
 	include("chv.jl")
@@ -19,9 +20,9 @@ module PiecewiseDeterministicMarkovProcesses
 	include("rejectiondiffeq.jl")
 	include("rejection.jl")
 	include("tau-leap.jl")
+	include("diffeq.jl")
 
-	export pdmp!,
-		ssa,
+	export ssa,
 		chv!,chv,
 		rejection!,
 		rejection_exact,
@@ -30,7 +31,7 @@ module PiecewiseDeterministicMarkovProcesses
 		pdmpArgs,
 		pdmpResult,
 		pdmp_data,
-		tauleap
+		ConstantRate, VariableRate, CompositeRate
 
 	export PDMPProblem, CHV, Rejection, RejectionExact, solve
 end # module

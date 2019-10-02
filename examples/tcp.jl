@@ -24,7 +24,7 @@ end
 
 function F_tcp!(ẋ, xc, xd, parms, t)
 	# vector field used for the continuous variable
-	if mod(xd[1],2)==0
+	if mod(xd[1], 2)==0
 		 ẋ[1] = 1.
 	else
 		 ẋ[1] = -1.
@@ -66,18 +66,15 @@ println("\n\nComparison of solvers")
 	push!(errors,norm(res.time - res_a[1],Inf64))
 end
 
-# plot(res_a[1],res_a[2])
 # plot!(res.time,res.xc[:,1])
-# #
-# # case with no allocations  0.000719 seconds (672 allocations: 57.250 KiB)
+# case with no allocations  0.000721 seconds (330 allocations: 26.266 KiB)
 # Random.seed!(1234)
-#	 res =  @time PiecewiseDeterministicMarkovProcesses.pdmp!(xc0, xd0, F_tcp!, R_tcp!, nu_tcp, parms, 0.0, tf, n_jumps = nj,   ode =Tsit5())
-#
-# # case with no allocations  0.000719 seconds (675 allocations: 57.297 KiB)
-# Random.seed!(1234)
-#	 res =  @time PiecewiseDeterministicMarkovProcesses.pdmp!(xc0, xd0, F_tcp!, R_tcp!, nu_tcp, parms, 0.0, tf, n_jumps = nj,   ode =Tsit5())
-#	 res.time[1:10] |> println
-#
+# 	problem = PDMP.PDMPProblem(F_tcp!, R_tcp!, nu_tcp, xc0, xd0, parms, (0.0, tf))
+# 	res =  @time PDMP.solve(problem, CHV(Tsit5()); n_jumps = nj, save_positions = (false, false))
+
+# res =  @timed PDMP.solve(problem, CHV(Tsit5()); n_jumps = nj, save_positions = (false, false))
+# res[end].poolalloc
+
 # # Random.seed!(1234)
 # #	 using PiecewiseDeterministicMarkovProcesses
 # #	 println("\n"*"+"^40)

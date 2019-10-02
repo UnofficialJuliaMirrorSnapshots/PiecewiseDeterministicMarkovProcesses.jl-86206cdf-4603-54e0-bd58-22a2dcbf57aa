@@ -1,4 +1,5 @@
 using SparseArrays
+
 # Dummy functions to allow not specifying these characteristics
 function F_dummy(ẋ, xc, xd, parms, t)
 	fill!(ẋ, 0)
@@ -42,8 +43,18 @@ struct PDMPCaracteristics{TF, TR, TJ, vecc, vecd, vecrate, Tparms}
 	function PDMPCaracteristics(F, R, Delta, nu::Tnu, xc0::vecc, xd0::vecd, parms::Tparms) where {Tc, Td, Tparms, Tnu <: AbstractMatrix{Td},
 						vecc <: AbstractVector{Tc},
 						vecd <: AbstractVector{Td}}
-		jump = RateJump(nu, Delta)
-		rate = zeros(Tc, size(nu, 1))
+		jump = Jump(nu, Delta)
+		rate = dualcache(get_rate_prototype(jump, Tc))
+		ratefunction = VariableRate(R)
+		return new{typeof(F), typeof(ratefunction), typeof(jump), vecc, vecd, typeof(rate), Tparms}(F, ratefunction, jump, copy(xc0), copy(xd0), copy(xc0), copy(xd0), rate, parms)
+	end
+
+	function PDMPCaracteristics(F, R::TR, Delta, nu::Tnu, xc0::vecc, xd0::vecd, parms::Tparms) where {Tc, Td, Tparms, Tnu <: AbstractMatrix{Td},
+						vecc <: AbstractVector{Tc},
+						vecd <: AbstractVector{Td},
+						TR <: AbstractRate}
+		jump = Jump(nu, Delta)
+		rate = dualcache(get_rate_prototype(jump, Tc))
 		return new{typeof(F), typeof(R), typeof(jump), vecc, vecd, typeof(rate), Tparms}(F, R, jump, copy(xc0), copy(xd0), copy(xc0), copy(xd0), rate, parms)
 	end
 end
@@ -56,6 +67,7 @@ end
 function init!(pb::PDMPCaracteristics)
 	pb.xc .= pb.xc0
 	pb.xd .= pb.xd0
+	init!(pb.R)
 end
 
 struct PDMPProblem{Tc, Td, vectype_xc <: AbstractVector{Tc},
@@ -64,13 +76,11 @@ struct PDMPProblem{Tc, Td, vectype_xc <: AbstractVector{Tc},
 	tspan::Vector{Tc}				    			# final simulation time interval, we use an array to be able to mutate it
 	simjptimes::PDMPJumpTime{Tc, Td}				# space to save result
 	time::Vector{Tc}
-	Xc::VectorOfArray{Tc, 2, Array{vectype_xc, 1}}		# continuous variable history
-	Xd::VectorOfArray{Td, 2, Array{vectype_xd, 1}}		# discrete variable history
+	Xc::VectorOfArray{Tc, 2, Array{vectype_xc, 1}}	# continuous variable history
+	Xd::VectorOfArray{Td, 2, Array{vectype_xd, 1}}	# discrete variable history
 	# variables for debugging
-	rate_hist::Vector{Tc}			# to save the rates for debugging purposes
-
-	# structs for characteristics of the PDMP
-	caract::Tcar
+	rate_hist::Vector{Tc}							# to save the rates for debugging purposes
+	caract::Tcar									# struct for characteristics of the PDMP
 end
 
 function init!(pb::PDMPProblem)
@@ -80,6 +90,7 @@ function init!(pb::PDMPProblem)
 	pb.simjptimes.njumps = 0
 	pb.simjptimes.fictitous_jumps = 0
 	resize!(pb.time, 1)
+	resize!(pb.rate_hist, 1)
 	resize!(pb.Xc.u, 1)
 	resize!(pb.Xd.u, 1)
 end
@@ -93,10 +104,7 @@ function PDMPProblem(F::TF, R::TR, DX::TD, nu::Tnu,
 				xc0::vecc, xd0::vecd, parms::Tp,
 				tspan) where {Tc, Td, Tnu <: AbstractMatrix{Td}, Tp, TF ,TR ,TD, vecc <: AbstractVector{Tc}, vecd <:  AbstractVector{Td}}
 	ti, tf = tspan
-	rate = zeros(Tc, size(nu, 1))
-	ratecache = copy(rate)#DiffCache(rate)
 	caract = PDMPCaracteristics(F, R, DX, nu, xc0, xd0, parms)
-	# custom type to collect all parameters in one structure
 	return PDMPProblem{Tc, Td, vecc, vecd, typeof(caract)}(
 			[ti, tf],
 			PDMPJumpTime{Tc, Td}(Tc(0), ti, 0, Tc(0), Vector{Tc}([0, 0]), false, 0),

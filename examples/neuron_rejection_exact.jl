@@ -3,20 +3,19 @@
 using PiecewiseDeterministicMarkovProcesses, LinearAlgebra, Random, SparseArrays
 const PDMP = PiecewiseDeterministicMarkovProcesses
 
-const N		 = 100
-const lambda_= 0.24
-const J		 = 0.98
+const N = 100
 
 function f(x)
-	return	x.^8
+	return	x^8
 end
 
 function Phi(out::Array{Float64,2}, xc, xd, parms, t::Array{Float64})
 	# vector field used for the continuous variable
 	# for this particular model, the empirical mean is constant between jumps
+	λ = 0.24
 	xbar::Float64 = sum(xc) / N
-	out[1,:] = copy(xc)
-	out[2,:] = xbar .+ exp(-lambda_*(t[2]-t[1])) .* (xc .- xbar)
+	out[1,:] .= xc
+	out[2,:] .= xbar .+ exp(-λ*(t[2]-t[1])) .* (xc .- xbar)
 	nothing
 end
 
@@ -39,8 +38,9 @@ end
 
 function Delta_xc_mf(xc, xd, parms, t::Float64, ind_reaction::Int64)
 	# this function return the jump in the continuous component
+	J = 0.98
 	for i=1:N
-	xc[i] += J/N
+		xc[i] += J/N
 	end
 	xc[ind_reaction] = 0.0
 	xd[ind_reaction] += 1
@@ -49,14 +49,14 @@ end
 
 Random.seed!(1234)
 xc0 = rand(N)*0.2 .+ 0.5
-xd0 = Vector{Int64}(zeros(N))
+xd0 = zeros(Int64, N)
 
-const nu_neur = SparseArrays.sparse(Array{Int64}(undef,N,N)*0)
+nu_neur = spzeros(Int64,N,N)
 parms = [0.1]
 tf = 10_050.
 
 problem = PDMP.PDMPProblem(Phi,R_mf_rejet,Delta_xc_mf,nu_neur, xc0, xd0, parms, (0.0, tf))
-	result = PDMP.solve(problem, PDMP.RejectionExact(); n_jumps = 10_000, ind_save_d = 1:2, ind_save_c = 1:2, verbose = false)
+	Random.seed!(8)
+	result = PDMP.solve(problem, PDMP.RejectionExact(); n_jumps = 10_000, ind_save_d = 1:2, ind_save_c = 1:2)
 
-# result = @time PiecewiseDeterministicMarkovProcesses.rejection_exact(1,xc0,xd0,Phi,R_mf_rejet,Delta_xc_mf,nu_neur,parms,0.0,tf,false,false)
-# result = @time PiecewiseDeterministicMarkovProcesses.rejection_exact(40_000,xc0,xd0,Phi,R_mf_rejet,Delta_xc_mf,nu_neur,parms,0.0,tf,false,false,ind_save_d = 1:2,ind_save_c = 1:2)
+result = PDMP.solve(problem, PDMP.RejectionExact(); n_jumps = 10_000, ind_save_d = 1:2, ind_save_c = 1:2)
