@@ -1,5 +1,11 @@
 using PiecewiseDeterministicMarkovProcesses, Test, LinearAlgebra, Random, DifferentialEquations
 
+macro testS(label, args...)
+	:(@testset $label begin @test $(args...); end)
+end
+
+include("simpleTests.jl")
+
 @testset "Example TCP" begin
 	include("../examples/tcp.jl")
 	@test norm(errors[6:end], Inf64) < 1e-4
@@ -11,9 +17,9 @@ end
 end
 
 @testset "Example with stiff ODE part" begin
-	include("../examples/pdmpStiff.jl")
+	include("pdmpStiff.jl")
 	@test norm(errors, Inf64) < 1e-3
-	@test restime1 == res12.time
+	@testS "Call many times the same problem" restime1 == res12.time
 end
 
 @testset "Controlling allocations" begin
@@ -35,6 +41,11 @@ end
 @testset "Rejection method" begin
 	include("../examples/tcp_rejection.jl")
 	@test norm(errors, Inf64) < 1e-5
+end
+
+@testset "Test number of fictitious jumps" begin
+	@test res1.njumps == res2.njumps
+	@test res1.nrejected == res2.nrejected
 end
 
 @testset "Neuron model" begin
@@ -59,6 +70,10 @@ end
 
 @testset "Neural network" begin
 	include("../examples/neuron_rejection_exact.jl")
-	@test result.xd[1,end] == 98
-	@test size(result.xd)[1] == 2
+	@test result.xd[1,end] == 97
+	@test size(result.xd)[1] == 100
+end
+
+@testset "DiffEqJump Wrap" begin
+	include("../examples/examplediffeqjumpwrapper.jl")
 end

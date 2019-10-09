@@ -18,9 +18,9 @@ function R_tcp!(rate, xc, xd, parms, t, issum::Bool)
 	if issum==false
 		rate[1] = rate_tcp(xc[1])
 		rate[2] = 0.0
-		return rate_tcp(xc[1]), 1.
+		return rate_tcp(xc[1]), 1.0
 	else
-		return rate_tcp(xc[1]), 1.
+		return rate_tcp(xc[1]), 1.0
 	end
 end
 
@@ -85,14 +85,28 @@ println("\n\nComparison of solvers")
 	push!(errors, norm(res.xc[1,1:nj] - res_a[2], Inf64))
 	end
 
-# test for allocations, should not depend on
-Random.seed!(1234)
+println("test for allocations, should not depend on")
+	Random.seed!(1234)
 	problem = PDMP.PDMPProblem(F_tcp!, R_tcp!, nu_tcp, xc0, xd0, parms, (0.0, tf))
 	res =  PDMP.solve(problem, Rejection(Tsit5()); n_jumps = nj, save_positions = (false, false))
 	Random.seed!(1234)
 	res =  @time PDMP.solve(problem, Rejection(Tsit5()); n_jumps = nj, save_positions = (false, false))
 	Random.seed!(1234)
 	res =  @time PDMP.solve(problem, Rejection(Tsit5()); n_jumps = 2nj, save_positions = (false, false))
+	Random.seed!(1234)
+	res =  @time PDMP.solve(problem, Rejection(Tsit5()); n_jumps = 3nj, save_positions = (false, false))
+
+println("test for multiple calls, the result should not depend on")
+	Random.seed!(1234)
+	problem = PDMP.PDMPProblem(F_tcp!, R_tcp!, nu_tcp, xc0, xd0, parms, (0.0, tf))
+	res1 =  PDMP.solve(problem, Rejection(Tsit5()); n_jumps = nj)
+	res2 =  PDMP.solve(problem, Rejection(Tsit5()); n_jumps = nj)
+	@assert res1.time != res2.time
+	Random.seed!(1234)
+	res1 =  PDMP.solve(problem, Rejection(Tsit5()); n_jumps = nj)
+	Random.seed!(1234)
+	res2 =  PDMP.solve(problem, Rejection(Tsit5()); n_jumps = nj)
+	@assert res1.time == res2.time
 
 # Random.seed!(1234)
 # 	problem = PDMP.PDMPProblem(F_tcp!, R_tcp!, nu_tcp, xc0, xd0, parms, (0.0, tf))
@@ -105,3 +119,16 @@ Random.seed!(1234)
 # Random.seed!(1234)
 # 	PDMP.PDMPProblem(F_tcp!, R_tcp!, nu_tcp, xc0, xd0, parms, (0.0, tf))
 # 	res = @time PDMP.solve(problem, Rejection(Tsit5()); n_jumps = 4nj, save_positions = (false, false))
+#
+# Random.seed!(1234)
+# 	problem = PDMP.PDMPProblem(F_tcp!, R_tcp!, nu_tcp, xc0, xd0, parms, (0.0, tf))
+# 	res =  PDMP.solve(problem, Rejection(:lsoda); n_jumps = nj, save_positions = (false, false), save_rate = true)
+
+
+# test the number of rejected jumps
+Random.seed!(1234)
+	problem = PDMP.PDMPProblem(F_tcp!, R_tcp!, nu_tcp, xc0, xd0, parms, (0.0, tf))
+	res1 =  PDMP.solve(problem, Rejection(:cvode); n_jumps = nj)
+Random.seed!(1234)
+	problem = PDMP.PDMPProblem(F_tcp!, R_tcp!, nu_tcp, xc0, xd0, parms, (0.0, tf))
+	res2 =  PDMP.solve(problem, Rejection(CVODE_BDF()); n_jumps = nj)

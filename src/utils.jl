@@ -1,4 +1,11 @@
 """
+Finalising function. It is called at the end of each computed jump for the user to alter the saving, plotting... procedure.
+"""
+function finalize_dummy(rate, xc, xd, p, t)
+	nothing
+end
+
+"""
 Function to pre-allocate arrays contening the result.
 """
 function allocate_arrays(ti	,xc0, xd0, n_max; rejection = false, ind_save_c=-1:1, ind_save_d=-1:1)
@@ -49,6 +56,8 @@ function pfsample(w::vec, s::Tc, n::Int64) where {Tc, vec <: AbstractVector{Tc}}
 	return i
 end
 
+pfsample(rate) = pfsample(rate, sum(rate), length(rate))
+
 """
 This type stores the output composed of:
 - **time** : a `Vector` of `Float64`, containing the times of simulated events.
@@ -67,4 +76,6 @@ struct PDMPResult{Tc <: Real, vectype_xc, vectype_xd}
 end
 
 PDMPResult(time, xchist, xdhist)  = PDMPResult(time, xchist, xdhist, eltype(xchist)[], (false,false), length(time), 0)
-PDMPResult(time, xchist, xdhist, rates, sp)  = PDMPResult(time, xchist, xdhist, rates, sp, length(time), 0)
+PDMPResult(time, xchist, xdhist, rates, savepos)  = PDMPResult(time, xchist, xdhist, rates, savepos, length(time), 0)
+
+PDMPResult(pb::PDMPProblem, savepos = (false, false)) = PDMPResult(copy(pb.time), copy(pb.Xc), copy(pb.Xd), copy(pb.rate_hist), savepos, pb.simjptimes.njumps, pb.simjptimes.fictitous_jumps)
